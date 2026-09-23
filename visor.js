@@ -31,7 +31,7 @@ li b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}l
 .error{padding:12px 16px;border-radius:8px;background:var(--err-soft);color:var(--err);font-weight:500}
 @keyframes in{from{opacity:0;transform:translateY(6px)}}@media(prefers-reduced-motion:reduce){li{animation:none}}
 </style></head><body><main>
-<header><h1>Visor gRPC · Productos</h1><p>Cada botón llama al microservicio NestJS en el puerto 5000 por gRPC.</p></header>
+<header><h1>Visor gRPC · Productos</h1><p>Cada botón llama al microservicio NestJS en el puerto 5000 por gRPC. Documentación: <a href="/docs">Swagger</a>.</p></header>
 <section class="card"><div class="head"><h2>Unary</h2><code>ObtenerProducto</code></div>
 <div class="row"><input id="id" type="number" value="1" aria-label="ID"><button class="primary" onclick="unary()">Obtener producto</button></div><div id="u"><div class="empty">Sin consultar todavía.</div></div></section>
 <section class="card"><div class="head"><h2>Server streaming</h2><code>ListarProductos</code></div>
@@ -49,9 +49,38 @@ es.addEventListener('fin',()=>{es.close();if(!ul.children.length)box.innerHTML='
 es.addEventListener('fallo',e=>{es.close();box.innerHTML=err(e.data||'No se pudo conectar al servidor gRPC (puerto 5000).')})}
 </script></body></html>`;
 
+const prod = { type: 'object', properties: { id: { type: 'integer', example: 1 }, nombre: { type: 'string', example: 'Teclado mecánico' }, precio: { type: 'number', example: 45.9 } } };
+const lista = { description: 'OK', content: { 'application/json': { schema: { type: 'array', items: prod } } } };
+const SPEC = {
+  openapi: '3.0.3',
+  info: { title: 'Productos · puente HTTP a gRPC', version: '1.0.0', description: 'Cada endpoint llama por gRPC al microservicio NestJS (ProductoService, puerto 5000). El contrato original está en src/productos.proto.' },
+  paths: {
+    '/api/producto/{id}': { get: { tags: ['Unary'], summary: 'ObtenerProducto (unary)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer', example: 1 } }],
+      responses: { 200: { description: 'OK', content: { 'application/json': { schema: prod } } }, 404: { description: 'gRPC NOT_FOUND (5)' } } } },
+    '/api/productos': { get: { tags: ['Server streaming'], summary: 'ListarProductos (stream acumulado en un arreglo)', responses: { 200: lista } } },
+    '/api/productos/buscar': { get: { tags: ['Server streaming'], summary: 'BuscarPorPrecioMaximo (stream acumulado en un arreglo)', parameters: [{ name: 'max', in: 'query', required: true, schema: { type: 'number', example: 50 } }], responses: { 200: lista } } },
+    '/api/stream': { get: { tags: ['Server streaming'], summary: 'Stream en vivo (SSE, producto por producto)', description: 'Swagger no muestra bien SSE; pruébalo en la página principal.', parameters: [{ name: 'tipo', in: 'query', schema: { type: 'string', enum: ['listar', 'buscar'] } }, { name: 'max', in: 'query', schema: { type: 'number' } }], responses: { 200: { description: 'text/event-stream' } } } },
+  },
+};
+const DOCS = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Swagger · Productos gRPC</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"></head><body>
+<div id="ui"></div><script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>SwaggerUIBundle({url:'/openapi.json',dom_id:'#ui'})</script></body></html>`;
+
+function coleccionar(call, res) {
+  const out = [];
+  call.on('data', (p) => out.push(p));
+  call.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(out)); });
+  call.on('error', (e) => { res.writeHead(502, { 'content-type': 'application/json' }); res.end(JSON.stringify({ code: e.code, details: e.details })); });
+}
+
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end(PAGE); }
+  if (url.pathname === '/docs') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end(DOCS); }
+  if (url.pathname === '/openapi.json') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(SPEC)); }
+  if (url.pathname === '/api/productos') return coleccionar(client.listarProductos({}), res);
+  if (url.pathname === '/api/productos/buscar') return coleccionar(client.buscarPorPrecioMaximo({ precioMaximo: Number(url.searchParams.get('max')) }), res);
   if (url.pathname.startsWith('/api/producto/')) {
     return client.obtenerProducto({ id: Number(url.pathname.split('/').pop()) }, (err, p) => {
       res.writeHead(err ? 404 : 200, { 'content-type': 'application/json' });

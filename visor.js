@@ -1,12 +1,6 @@
 // Visor web: puente HTTP -> gRPC solo para verlo en el navegador (localhost:3100)
 import http from 'node:http';
-import path from 'node:path';
-import grpc from '@grpc/grpc-js';
-import protoLoader from '@grpc/proto-loader';
-
-const def = protoLoader.loadSync(path.join(import.meta.dirname, 'src', 'productos.proto'), { keepCase: true, defaults: true });
-const proto = grpc.loadPackageDefinition(def).productos;
-const client = new proto.ProductoService('localhost:5000', grpc.credentials.createInsecure());
+import { client } from './conexion.js';
 
 const PAGE = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Visor gRPC</title><style>

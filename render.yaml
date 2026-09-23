@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: productos-grpc
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm run start:prod

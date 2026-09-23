@@ -1,12 +1,6 @@
-import path from 'node:path';
-import grpc from '@grpc/grpc-js';
-import protoLoader from '@grpc/proto-loader';
+import { client, target } from './conexion.js';
 
-const PROTO_PATH = path.join(import.meta.dirname, 'src', 'productos.proto');
-const packageDef = protoLoader.loadSync(PROTO_PATH, { keepCase: true, longs: String, enums: String, defaults: true });
-const proto = grpc.loadPackageDefinition(packageDef).productos;
-
-const client = new proto.ProductoService('localhost:5000', grpc.credentials.createInsecure());
+console.log(`Conectando a ${target}`);
 
 function stream(titulo, call, siguiente) {
   console.log(`\n== ${titulo} ==`);
